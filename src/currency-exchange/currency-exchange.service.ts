@@ -1,32 +1,63 @@
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 const axios = require('axios');
-
+const fs = require('fs');
 const { WebClient } = require('@slack/web-api');
-
 @Injectable()
 export class CurrencyExchangeService {
-  constructor() {}
+  //   storage = diskStorage({
+  //     destination: (req, file, cb) => {
+  //       // Specify the directory where the file will be saved
+  //       const directory = './uploads';
+  //       cb(null, directory);
+  //     },
+  //     filename: (req, file, cb) => {
+  //       // Set a custom file name
+  //       cb(null, 'data.json');
+  //     },
+  //  });
+  constructor() {
+    // const readJsonFile = (req, res) => {
+    //   try {
+    //     const filePath = './data/data.json';
+    //     const jsonData = fs.readFileSync(filePath, 'utf-8');
+    //     const parsedData = JSON.parse(jsonData);
+    //     res.json(parsedData);
+    //   } catch (error) {
+    //     console.error('Error reading JSON file:', error);
+    //     res.status(500).json({ error: 'Failed to read JSON file.' });
+    //   }
+    // };
+    // console.log(readJsonFile);
+  }
 
-  token = 'YOUR_SLACK_API_TOKEN';
+  token = 'SLACK_API_TOKEN';
   web = new WebClient(this.token);
 
-  currencyList = ['EUR', 'GBP'];
-  minWarningRate = 3; //%
-  maxWarningRate = -3; //%
-  currentExchangeRate = {
-    EUR: 0.95,
-    GBP: 0.9,
-  };
+  currencyList = ['USD', 'GBP'];
+  currencyMinRef = { USD: 0.05, GBP: 0.05 };
+  currencyMaxRef = { USD: 0.1, GBP: 0.1 };
+  currencyStoreRef = { USD: 1, GBP: 0.88 };
+  currentExchangeRate = { USD: 1.09, GBP: 0.853 };
 
-  currencyMinRef = { USD: 1, EUR: 0.85, GBP: 0.75 };
-  currencyMaxRef = { USD: 1, EUR: 0.93, GBP: 0.85 };
-  currencyCurrentRef = { USD: 1, EUR: 0.95, GBP: 0.88 };
+  async getMyExchangeRate() {
+    const transformedData = this.currencyList.map((currency) => {
+      return {
+        currency: currency,
+        storeExchangeRate: this.currencyStoreRef[currency],
+        minExchangeRate: this.currencyMinRef[currency],
+        maxExchangeRate: this.currencyMaxRef[currency],
+        currentExchangeRate: this.currentExchangeRate[currency],
+      };
+    });
+
+    return transformedData;
+  }
 
   async getExchangeRate(): Promise<Object> {
     try {
       const response = await axios.get(
-        'https://api.exchangerate-api.com/v4/latest/USD',
+        'https://api.exchangerate-api.com/v4/latest/EUR',
       );
       const rates = response.data.rates;
       const currencyExchange = {
@@ -52,8 +83,8 @@ export class CurrencyExchangeService {
           const value = res[currency];
           const refValue = this.currencyMinRef[currency];
 
-          if (value < refValue) {
-            this.triggerErrer(currency, value, refValue);
+          if (value < refValue - this.currencyStoreRef[currency]) {
+            this.triggerErrer(currency, value, refValue, false);
           }
         }
       }
@@ -62,29 +93,26 @@ export class CurrencyExchangeService {
           const value = res[currency];
           const refValue = this.currencyMaxRef[currency];
 
-          if (value > refValue) {
-            this.triggerErrer(currency, value, refValue);
+          if (value > refValue + this.currencyStoreRef[currency]) {
+            this.triggerErrer(currency, value, refValue, true);
           }
         }
       }
     });
   }
 
-  triggerErrer(currency: string, value: number, refValue: number) {
+  triggerErrer(currency: string, value: number, refValue: number, isAbove) {
     let errer = '';
-    if (value > refValue)
+    if (isAbove)
       errer = `${currency} value (${value}) is below the currency reference (${refValue}).`;
     //this.sendSlackMessage('CHANNEL_ID', errer);
     //   console.error(
     //     `${currency} value (${value}) is below the currency reference (${refValue}).`,
     //   );
 
-    if (value < refValue)
+    if (isAbove)
       errer = `${currency} value (${value}) is above the currency reference (${refValue}).`;
     //this.sendSlackMessage('CHANNEL_ID', errer);
-    console.error(
-      `${currency} value (${value}) is above the currency reference (${refValue}).`,
-    );
   }
 
   async sendSlackMessage(channel, text) {
@@ -97,6 +125,12 @@ export class CurrencyExchangeService {
     } catch (error) {
       console.error('Error sending message:', error);
     }
+  }
+
+  editCurrency(obj) {
+    this.currencyMinRef[obj.currency] = obj.currencyMinRef;
+    this.currencyMaxRef[obj.currency] = obj.currencyMaxRef;
+    this.currencyStoreRef[obj.currency] = obj.currencyStoreRef;
   }
 
   @Cron('* * * * * *')
