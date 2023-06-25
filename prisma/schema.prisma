@@ -9,3 +9,10 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Currency {
+        currency String     @id
+        storeExchangeRate Float     @default(1)
+        minExchangeRate Float     @default(1)
+        maxExchangeRate Float     @default(1)
+}
