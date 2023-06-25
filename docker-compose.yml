@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  dev-db:
+    image: postgres:13
+    ports:
+      - 5431:5432
+    environment:
+      POSTGRES_USER: ibrahim
+      POSTGRES_PASSWORD: test123
+      POSTGRES_DB: hosinger
+    networks:
+      - ibrahimgb
+  test-db:
+    image: postgres:13
+    ports:
+      - 5435:5432
+    environment:
+      POSTGRES_USER: ibrahim
+      POSTGRES_PASSWORD: test123
+      POSTGRES_DB: hosinger
+    networks:
+      - ibrahimgb
+networks:
+  ibrahimgb:
